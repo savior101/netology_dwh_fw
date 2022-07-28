@@ -4,6 +4,8 @@ CREATE SCHEMA dds;
 
 CREATE SCHEMA dq;
 
+CREATE SCHEMA metadata;
+
 
 -------------------- stage --------------------
 
@@ -280,5 +282,389 @@ CREATE TABLE dq.rejected_ticket_flights
 );
 
 
+-------------------- metadata --------------------
 
+
+-- metadata.bookings
+CREATE TABLE metadata.bookings
+(
+	source_connection_name varchar(50) not null,
+	source_sql_st text not null,
+	target_connection_name varchar(50) not null,
+	target_schema varchar(50) not null,
+	target_table varchar(50) not null,
+	target_table_field varchar(100) not null,
+	target_stream_field varchar(100) not null,
+	target_truncate_table int2 not null,
+	ord int2,
+	primary key (source_connection_name, target_connection_name, target_schema, target_table, target_table_field)
+);
+
+
+-------------------- заполняем dds.dim_calendar --------------------
+
+WITH dates AS (
+    SELECT dd::date AS dt
+    FROM generate_series
+            ('2016-01-01'::timestamp
+            , '2016-12-31':timestamp
+            , '1 day'::interval) dd
+)
+INSERT INTO dds.dim_calendar
+SELECT
+    to_char(dt, 'YYYYMMDD')::int AS id,
+    dt AS date,
+    date_part('isodow', dt)::int AS day,
+    date_part('week', dt)::int AS week_number,
+    date_part('month', dt)::int AS month,
+    date_part('isoyear', dt)::int AS year,
+    (date_part('isodow', dt)::smallint BETWEEN 1 AND 5)::int AS week_day,
+    (to_char(dt, 'YYYYMMDD')::int IN (
+        20160101,
+        20160102,
+        20160103,
+        20160104,
+        20160105,
+        20160106,
+        20160107,
+        20160108,
+        20160222,
+        20160223,
+        20160307,
+        20160308,
+        20160501,
+        20160502,
+        20160503,
+        20160509,
+        20160612,
+        20160613,
+        20161104,
+        20170101
+))::int AS holiday
+FROM dates
+ORDER BY dt;
+
+
+-------------------- заполняем metadata.bookings --------------------
+
+insert into metadata.bookings (
+	source_connection_name
+	, source_sql_st
+	, target_connection_name
+	, target_schema
+	, target_table
+	, target_table_field
+	, target_stream_field
+	, target_truncate_table
+	, ord)
+values
+	(
+		'booking_source'
+		, 'select aircraft_code, model, range from bookings.aircrafts order by aircraft_code'
+		, 'dwh'
+		, 'stage'
+		, 'aircrafts'
+		, 'aircraft_code'
+		, 'aircraft_code'
+		, 1
+		, 1
+	),
+	(
+		'booking_source'
+		, 'select aircraft_code, model, range from bookings.aircrafts order by aircraft_code'
+		, 'dwh'
+		, 'stage'
+		, 'aircrafts'
+		, 'model'
+		, 'model'
+		, 1
+		, 2
+	),
+	(
+		'booking_source'
+		, 'select aircraft_code, model, range from bookings.aircrafts order by aircraft_code'
+		, 'dwh'
+		, 'stage'
+		, 'aircrafts'
+		, 'range'
+		, 'range'
+		, 1
+		, 3
+	),
+	(
+		'booking_source'
+		, 'select airport_code, airport_name, city, longitude, latitude, timezone from bookings.airports order by airport_code'
+		, 'dwh'
+		, 'stage'
+		, 'airports'
+		, 'airport_code'
+		, 'airport_code'
+		, 1
+		, 1
+	),
+	(
+		'booking_source'
+		, 'select airport_code, airport_name, city, longitude, latitude, timezone from bookings.airports order by airport_code'
+		, 'dwh'
+		, 'stage'
+		, 'airports'
+		, 'airport_name'
+		, 'airport_name'
+		, 1
+		, 2
+	),
+	(
+		'booking_source'
+		, 'select airport_code, airport_name, city, longitude, latitude, timezone from bookings.airports order by airport_code'
+		, 'dwh'
+		, 'stage'
+		, 'airports'
+		, 'city'
+		, 'city'
+		, 1
+		, 3
+	),
+	(
+		'booking_source'
+		, 'select airport_code, airport_name, city, longitude, latitude, timezone from bookings.airports order by airport_code'
+		, 'dwh'
+		, 'stage'
+		, 'airports'
+		, 'longitude'
+		, 'longitude'
+		, 1
+		, 4
+	),
+	(
+		'booking_source'
+		, 'select airport_code, airport_name, city, longitude, latitude, timezone from bookings.airports order by airport_code'
+		, 'dwh'
+		, 'stage'
+		, 'airports'
+		, 'latitude'
+		, 'latitude'
+		, 1
+		, 5
+	),
+	(
+		'booking_source'
+		, 'select airport_code, airport_name, city, longitude, latitude, timezone from bookings.airports order by airport_code'
+		, 'dwh'
+		, 'stage'
+		, 'airports'
+		, 'timezone'
+		, 'timezone'
+		, 1
+		, 6
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'flight_id'
+		, 'flight_id'
+		, 0
+		, 1
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'flight_no'
+		, 'flight_no'
+		, 0
+		, 2
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'scheduled_departure'
+		, 'scheduled_departure'
+		, 0
+		, 3
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'scheduled_arrival'
+		, 'scheduled_arrival'
+		, 0
+		, 4
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'departure_airport'
+		, 'departure_airport'
+		, 0
+		, 5
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'arrival_airport'
+		, 'arrival_airport'
+		, 0
+		, 6
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'status'
+		, 'status'
+		, 0
+		, 7
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'aircraft_code'
+		, 'aircraft_code'
+		, 0
+		, 8
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'actual_departure'
+		, 'actual_departure'
+		, 0
+		, 9
+	),
+	(
+		'booking_source'
+		, 'select flight_id, flight_no, scheduled_departure, scheduled_arrival, departure_airport, arrival_airport, status, aircraft_code, actual_departure, actual_arrival from bookings.flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id'
+		, 'dwh'
+		, 'stage'
+		, 'flights'
+		, 'actual_arrival'
+		, 'actual_arrival'
+		, 0
+		, 10
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, flight_id, fare_conditions, amount from bookings.ticket_flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id, ticket_no'
+		, 'dwh'
+		, 'stage'
+		, 'ticket_flights'
+		, 'ticket_no'
+		, 'ticket_no'
+		, 0
+		, 1
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, flight_id, fare_conditions, amount from bookings.ticket_flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id, ticket_no'
+		, 'dwh'
+		, 'stage'
+		, 'ticket_flights'
+		, 'flight_id'
+		, 'flight_id'
+		, 0
+		, 2
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, flight_id, fare_conditions, amount from bookings.ticket_flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id, ticket_no'
+		, 'dwh'
+		, 'stage'
+		, 'ticket_flights'
+		, 'fare_conditions'
+		, 'fare_conditions'
+		, 0
+		, 3
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, flight_id, fare_conditions, amount from bookings.ticket_flights where flight_id > ${MAX_FLIGHT_ID} order by flight_id, ticket_no'
+		, 'dwh'
+		, 'stage'
+		, 'ticket_flights'
+		, 'amount'
+		, 'amount'
+		, 0
+		, 4
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, book_ref, passenger_id, passenger_name, contact_data from bookings.tickets where ticket_no::bigint > ${MAX_TICKET_NO} order by ticket_no::bigint'
+		, 'dwh'
+		, 'stage'
+		, 'tickets'
+		, 'ticket_no'
+		, 'ticket_no'
+		, 0
+		, 1
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, book_ref, passenger_id, passenger_name, contact_data from bookings.tickets where ticket_no::bigint > ${MAX_TICKET_NO} order by ticket_no::bigint'
+		, 'dwh'
+		, 'stage'
+		, 'tickets'
+		, 'book_ref'
+		, 'book_ref'
+		, 0
+		, 2
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, book_ref, passenger_id, passenger_name, contact_data from bookings.tickets where ticket_no::bigint > ${MAX_TICKET_NO} order by ticket_no::bigint'
+		, 'dwh'
+		, 'stage'
+		, 'tickets'
+		, 'passenger_id'
+		, 'passenger_id'
+		, 0
+		, 3
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, book_ref, passenger_id, passenger_name, contact_data from bookings.tickets where ticket_no::bigint > ${MAX_TICKET_NO} order by ticket_no::bigint'
+		, 'dwh'
+		, 'stage'
+		, 'tickets'
+		, 'passenger_name'
+		, 'passenger_name'
+		, 0
+		, 4
+	),
+	(
+		'booking_source'
+		, 'select ticket_no, book_ref, passenger_id, passenger_name, contact_data from bookings.tickets where ticket_no::bigint > ${MAX_TICKET_NO} order by ticket_no::bigint'
+		, 'dwh'
+		, 'stage'
+		, 'tickets'
+		, 'contact_data'
+		, 'contact_data'
+		, 0
+		, 5
+	)
+;
 

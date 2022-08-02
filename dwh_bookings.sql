@@ -78,24 +78,31 @@ CREATE TABLE stage.ticket_flights
 
 
 -- dds.dim_aircrafts
-DROP TABLE IF EXISTS dds.dim_aircrafts;
+DROP TABLE IF EXISTS dds.dim_aircrafts CASCADE;
 
 CREATE TABLE dds.dim_aircrafts
 (
+ id			   serial,
  aircraft_code bpchar(3) NOT NULL,
  model         text NOT NULL,
  range         int NOT NULL,
  start_ts      date NOT NULL,
  end_ts        date NOT NULL,
- is_current    boolean NOT NULL,
- CONSTRAINT PK_22 PRIMARY KEY ( aircraft_code )
+ is_current    boolean NOT NULL DEFAULT TRUE,
+ version       int2 NOT NULL DEFAULT 1,
+ CONSTRAINT PK_22 PRIMARY KEY ( id )
 );
 
+-- Для устранения ошибки Пентахо добавления в таблицу SCD2 "нулевой" строки с id = 0
+INSERT INTO dds.dim_aircrafts (id, aircraft_code, model, "range", start_ts, end_ts, is_current, version)
+VALUES (0, '', '', 1, now()::date, now()::date, TRUE, 1);
+
 -- dds.dim_airports
-DROP TABLE IF EXISTS dds.dim_airports;
+DROP TABLE IF EXISTS dds.dim_airports CASCADE;
 
 CREATE TABLE dds.dim_airports
 (
+ id			  serial,
  airport_code bpchar(3) NOT NULL,
  airport_name text NOT NULL,
  city         text NOT NULL,
@@ -103,12 +110,17 @@ CREATE TABLE dds.dim_airports
  latitude     float8 NOT NULL,
  start_ts     date NOT NULL,
  end_ts       date NOT NULL,
- is_current   boolean NOT NULL,
- CONSTRAINT PK_27 PRIMARY KEY ( airport_code )
+ is_current    boolean NOT NULL DEFAULT TRUE,
+ version       int2 NOT NULL DEFAULT 1,
+ CONSTRAINT PK_27 PRIMARY KEY ( id )
 );
 
+-- Для устранения ошибки Пентахо добавления в таблицу SCD2 "нулевой" строки с id = 0
+INSERT INTO dds.dim_airports (id, airport_code, airport_name, city, latitude, longitude, start_ts, end_ts, is_current, version)
+VALUES (0, '', '', '', 0.00, 0.00, now()::date, now()::date, TRUE, 1);
+
 -- dds.dim_calendar
-DROP TABLE IF EXISTS dds.dim_calendar;
+DROP TABLE IF EXISTS dds.dim_calendar CASCADE;
 
 CREATE TABLE dds.dim_calendar
 (
@@ -124,22 +136,19 @@ CREATE TABLE dds.dim_calendar
 );
 
 -- dds.dim_passengers
-DROP TABLE IF EXISTS dds.dim_passengers;
+DROP TABLE IF EXISTS dds.dim_passengers CASCADE;
 
 CREATE TABLE dds.dim_passengers
 (
- id             varchar(20) NOT NULL,
+ passenger_id	varchar(20) NOT NULL,
  passenger_name text NOT NULL,
  phone          varchar(20) NULL,
  email          varchar(100) NULL,
- start_ts       date NOT NULL,
- end_ts         date NOT NULL,
- is_current     boolean NOT NULL,
- CONSTRAINT PK_17 PRIMARY KEY ( id )
+ CONSTRAINT PK_17 PRIMARY KEY ( passenger_id )
 );
 
 -- dds.dim_tariffs
-DROP TABLE IF EXISTS dds.dim_tariffs;
+DROP TABLE IF EXISTS dds.dim_tariffs CASCADE;
 
 CREATE TABLE dds.dim_tariffs
 (
@@ -149,7 +158,7 @@ CREATE TABLE dds.dim_tariffs
 );
 
 -- dds.fact_flights
-DROP TABLE IF EXISTS dds.fact_flights;
+DROP TABLE IF EXISTS dds.fact_flights CASCADE;
 
 CREATE TABLE dds.fact_flights
 (
@@ -159,18 +168,17 @@ CREATE TABLE dds.fact_flights
  departure_airport bpchar(3) NOT NULL,
  arrival_airport   bpchar(3) NOT NULL,
  aircraft_code     bpchar(3) NOT NULL,
- calendar_id       int NOT NULL,
  actual_departure  timestamptz NULL,
+ a_d_calendar_id   int NULL,
  actual_arrival    timestamptz NULL,
- delay_departure   interval second NULL,
- delay_arrival     interval second NULL,
+ a_a_calendar_id   int NULL,
+ delay_departure   int8 NULL,
+ delay_arrival     int8 NULL,
  amount            numeric(10,2) NOT NULL,
- CONSTRAINT PK_38 PRIMARY KEY ( id ),
- CONSTRAINT FK_45 FOREIGN KEY ( passenger_id ) REFERENCES dds.dim_passengers ( id ),
- CONSTRAINT FK_52 FOREIGN KEY ( calendar_id ) REFERENCES dds.dim_calendar ( id ),
- CONSTRAINT FK_59 FOREIGN KEY ( aircraft_code ) REFERENCES dds.dim_aircrafts ( aircraft_code ),
- CONSTRAINT FK_62 FOREIGN KEY ( arrival_airport ) REFERENCES dds.dim_airports ( airport_code ),
- CONSTRAINT FK_65 FOREIGN KEY ( departure_airport ) REFERENCES dds.dim_airports ( airport_code ),
+ CONSTRAINT PK_38 PRIMARY KEY ( id, passenger_id ),
+ CONSTRAINT FK_45 FOREIGN KEY ( passenger_id ) REFERENCES dds.dim_passengers ( passenger_id ),
+ CONSTRAINT FK_52 FOREIGN KEY ( a_d_calendar_id ) REFERENCES dds.dim_calendar ( id ),
+ CONSTRAINT FK_152 FOREIGN KEY ( a_a_calendar_id ) REFERENCES dds.dim_calendar ( id ),
  CONSTRAINT FK_68 FOREIGN KEY ( tariff_id ) REFERENCES dds.dim_tariffs ( id )
 );
 
@@ -181,7 +189,12 @@ CREATE INDEX FK_47 ON dds.fact_flights
 
 CREATE INDEX FK_54 ON dds.fact_flights
 (
- calendar_id
+ a_d_calendar_id
+);
+
+CREATE INDEX FK_154 ON dds.fact_flights
+(
+ a_a_calendar_id
 );
 
 CREATE INDEX FK_61 ON dds.fact_flights
@@ -208,12 +221,12 @@ CREATE INDEX FK_70 ON dds.fact_flights
 -------------------- dq --------------------
 
 
--- dq.rejected_aicrafts
-DROP TABLE IF EXISTS dq.rejected_aicrafts;
+-- dq.rejected_aircrafts
+DROP TABLE IF EXISTS dq.rejected_aircrafts CASCADE;
 
-CREATE TABLE dq.rejected_aicrafts
+CREATE TABLE dq.rejected_aircrafts
 (
- aicraft_code bpchar(3) NULL,
+ aircraft_code bpchar(3) NULL,
  model        text NULL,
  range        int4 NULL,
  rej_reason   text NULL,
@@ -221,7 +234,7 @@ CREATE TABLE dq.rejected_aicrafts
 );
 
 -- dq.rejected_airports
-DROP TABLE IF EXISTS dq.rejected_airports;
+DROP TABLE IF EXISTS dq.rejected_airports CASCADE;
 
 CREATE TABLE dq.rejected_airports
 (
@@ -236,26 +249,29 @@ CREATE TABLE dq.rejected_airports
 );
 
 -- dq.rejected_flights
-DROP TABLE IF EXISTS dq.rejected_flights;
+DROP TABLE IF EXISTS dq.rejected_flights CASCADE;
 
 CREATE TABLE dq.rejected_flights
 (
- flight_id           int NULL,
- flight_no           bpchar(6) NULL,
- scheduled_departure timestamptz NULL,
- scheduled_arrival   timestamptz NULL,
- departure_airport   bpchar(3) NULL,
- arrival_airport     bpchar(3) NULL,
- status              varchar(20) NULL,
- aircraft_code       bpchar(3) NULL,
- actual_departure    timestamptz NULL,
- actual_arrival      timestamptz NULL,
- rej_reason          text NULL,
- rej_dt              timestamp NULL
+ id                int NULL,
+ passenger_id      varchar(20) NULL,
+ tariff_id         int NULL,
+ departure_airport bpchar(3) NULL,
+ arrival_airport   bpchar(3) NULL,
+ aircraft_code     bpchar(3) NULL,
+ actual_departure  timestamptz NULL,
+ a_d_calendar_id   int NULL,
+ actual_arrival    timestamptz NULL,
+ a_a_calendar_id   int NULL,
+ delay_departure   int8 NULL,
+ delay_arrival     int8 NULL,
+ amount            numeric(10,2) NULL,
+ rej_reason        text NULL,
+ rej_dt            timestamp NULL
 );
 
 -- dq.rejected_tickets
-DROP TABLE IF EXISTS dq.rejected_tickets;
+DROP TABLE IF EXISTS dq.rejected_tickets CASCADE;
 
 CREATE TABLE dq.rejected_tickets
 (
@@ -268,15 +284,12 @@ CREATE TABLE dq.rejected_tickets
  rej_dt         timestamp NULL
 );
 
--- dq.rejected_ticket_flights
-DROP TABLE IF EXISTS dq.rejected_ticket_flights;
+-- dq.rejected_tariffs
+DROP TABLE IF EXISTS dq.rejected_tariffs CASCADE;
 
-CREATE TABLE dq.rejected_ticket_flights
+CREATE TABLE dq.rejected_tariffs
 (
- ticket_no       varchar(13) NULL,
- ticket_id       int4 NULL,
  fare_conditions varchar(10) NULL,
- amount          numeric(10,2) NULL,
  rej_reason      text NULL,
  rej_dt          timestamp NULL
 );
@@ -307,7 +320,7 @@ WITH dates AS (
     SELECT dd::date AS dt
     FROM generate_series
             ('2016-01-01'::timestamp
-            , '2016-12-31':timestamp
+            , '2016-12-31'::timestamp
             , '1 day'::interval) dd
 )
 INSERT INTO dds.dim_calendar

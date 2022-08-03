@@ -1,17 +1,17 @@
-CREATE SCHEMA stage;
+CREATE SCHEMA IF NOT EXISTS stage;
 
-CREATE SCHEMA dds;
+CREATE SCHEMA IF NOT EXISTS dds;
 
-CREATE SCHEMA dq;
+CREATE SCHEMA IF NOT EXISTS dq;
 
-CREATE SCHEMA metadata;
+CREATE SCHEMA IF NOT EXISTS metadata;
 
 
 -------------------- stage --------------------
 
 
 -- stage.aircrafts
-DROP TABLE IF EXISTS stage.aircraft;
+DROP TABLE IF EXISTS stage.aircrafts CASCADE;
 
 CREATE TABLE stage.aircrafts
 (
@@ -21,7 +21,7 @@ CREATE TABLE stage.aircrafts
 );
 
 -- stage.airports
-DROP TABLE IF EXISTS stage.airports;
+DROP TABLE IF EXISTS stage.airports CASCADE;
 
 CREATE TABLE stage.airports
 (
@@ -34,7 +34,7 @@ CREATE TABLE stage.airports
 );
 
 -- stage.flights
-DROP TABLE IF EXISTS stage.flights;
+DROP TABLE IF EXISTS stage.flights CASCADE;
 
 CREATE TABLE stage.flights
 (
@@ -51,7 +51,7 @@ CREATE TABLE stage.flights
 );
 
 -- stage.tickets
-DROP TABLE IF EXISTS stage.tickets;
+DROP TABLE IF EXISTS stage.tickets CASCADE;
 
 CREATE TABLE stage.tickets
 (
@@ -63,14 +63,14 @@ CREATE TABLE stage.tickets
 );
 
 -- stage.ticket_flights
-DROP TABLE IF EXISTS stage.ticket_flights;
+DROP TABLE IF EXISTS stage.ticket_flights CASCADE;
 
 CREATE TABLE stage.ticket_flights
 (
  ticket_no       bpchar(13) NULL,
  flight_id       int4 NULL,
  fare_conditions varchar(10) NULL,
- amount          numeric(10,2) NOT NULL
+ amount          numeric(10,2) NULL
 );
 
 
@@ -164,6 +164,7 @@ CREATE TABLE dds.fact_flights
 (
  id                int NOT NULL,
  passenger_id      varchar(20) NOT NULL,
+ ticket_no		   bpchar(13) NOT NULL,
  tariff_id         int NOT NULL,
  departure_airport bpchar(3) NOT NULL,
  arrival_airport   bpchar(3) NOT NULL,
@@ -226,11 +227,11 @@ DROP TABLE IF EXISTS dq.rejected_aircrafts CASCADE;
 
 CREATE TABLE dq.rejected_aircrafts
 (
- aircraft_code bpchar(3) NULL,
- model        text NULL,
- range        int4 NULL,
- rej_reason   text NULL,
- rej_dt       timestamp NULL
+ aircraft_code text NULL,
+ model         text NULL,
+ range         int NULL,
+ rej_reason    text NULL,
+ rej_dt        timestamp NULL
 );
 
 -- dq.rejected_airports
@@ -238,12 +239,11 @@ DROP TABLE IF EXISTS dq.rejected_airports CASCADE;
 
 CREATE TABLE dq.rejected_airports
 (
- airport_code bpchar(3) NULL,
+ airport_code text NULL,
  airport_name text NULL,
  city         text NULL,
  longitude    float8 NULL,
  latitude     float8 NULL,
- timezone     text NULL,
  rej_reason   text NULL,
  rej_dt       timestamp NULL
 );
@@ -254,11 +254,12 @@ DROP TABLE IF EXISTS dq.rejected_flights CASCADE;
 CREATE TABLE dq.rejected_flights
 (
  id                int NULL,
- passenger_id      varchar(20) NULL,
+ passenger_id      text NULL,
+ ticket_no		   text NOT NULL,
  tariff_id         int NULL,
- departure_airport bpchar(3) NULL,
- arrival_airport   bpchar(3) NULL,
- aircraft_code     bpchar(3) NULL,
+ departure_airport text NULL,
+ arrival_airport   text NULL,
+ aircraft_code     text NULL,
  actual_departure  timestamptz NULL,
  a_d_calendar_id   int NULL,
  actual_arrival    timestamptz NULL,
@@ -271,15 +272,14 @@ CREATE TABLE dq.rejected_flights
 );
 
 -- dq.rejected_tickets
-DROP TABLE IF EXISTS dq.rejected_tickets CASCADE;
+DROP TABLE IF EXISTS dq.rejected_passengers CASCADE;
 
-CREATE TABLE dq.rejected_tickets
+CREATE TABLE dq.rejected_passengers
 (
- ticket_no      varchar(13) NULL,
- book_ref       bpchar(6) NULL,
- passenger_id   varchar(20) NULL,
+ passenger_id	text NULL,
  passenger_name text NULL,
- contact_data   jsonb NULL,
+ phone          text NULL,
+ email          text NULL,
  rej_reason     text NULL,
  rej_dt         timestamp NULL
 );
@@ -289,7 +289,7 @@ DROP TABLE IF EXISTS dq.rejected_tariffs CASCADE;
 
 CREATE TABLE dq.rejected_tariffs
 (
- fare_conditions varchar(10) NULL,
+ fare_conditions text NULL,
  rej_reason      text NULL,
  rej_dt          timestamp NULL
 );
@@ -478,7 +478,7 @@ values
 		, 'flights'
 		, 'flight_id'
 		, 'flight_id'
-		, 0
+		, 1
 		, 1
 	),
 	(
@@ -489,7 +489,7 @@ values
 		, 'flights'
 		, 'flight_no'
 		, 'flight_no'
-		, 0
+		, 1
 		, 2
 	),
 	(
@@ -500,7 +500,7 @@ values
 		, 'flights'
 		, 'scheduled_departure'
 		, 'scheduled_departure'
-		, 0
+		, 1
 		, 3
 	),
 	(
@@ -511,7 +511,7 @@ values
 		, 'flights'
 		, 'scheduled_arrival'
 		, 'scheduled_arrival'
-		, 0
+		, 1
 		, 4
 	),
 	(
@@ -522,7 +522,7 @@ values
 		, 'flights'
 		, 'departure_airport'
 		, 'departure_airport'
-		, 0
+		, 1
 		, 5
 	),
 	(
@@ -533,7 +533,7 @@ values
 		, 'flights'
 		, 'arrival_airport'
 		, 'arrival_airport'
-		, 0
+		, 1
 		, 6
 	),
 	(
@@ -544,7 +544,7 @@ values
 		, 'flights'
 		, 'status'
 		, 'status'
-		, 0
+		, 1
 		, 7
 	),
 	(
@@ -555,7 +555,7 @@ values
 		, 'flights'
 		, 'aircraft_code'
 		, 'aircraft_code'
-		, 0
+		, 1
 		, 8
 	),
 	(
@@ -566,7 +566,7 @@ values
 		, 'flights'
 		, 'actual_departure'
 		, 'actual_departure'
-		, 0
+		, 1
 		, 9
 	),
 	(
@@ -577,7 +577,7 @@ values
 		, 'flights'
 		, 'actual_arrival'
 		, 'actual_arrival'
-		, 0
+		, 1
 		, 10
 	),
 	(
@@ -588,7 +588,7 @@ values
 		, 'ticket_flights'
 		, 'ticket_no'
 		, 'ticket_no'
-		, 0
+		, 1
 		, 1
 	),
 	(
@@ -599,7 +599,7 @@ values
 		, 'ticket_flights'
 		, 'flight_id'
 		, 'flight_id'
-		, 0
+		, 1
 		, 2
 	),
 	(
@@ -610,7 +610,7 @@ values
 		, 'ticket_flights'
 		, 'fare_conditions'
 		, 'fare_conditions'
-		, 0
+		, 1
 		, 3
 	),
 	(
@@ -621,7 +621,7 @@ values
 		, 'ticket_flights'
 		, 'amount'
 		, 'amount'
-		, 0
+		, 1
 		, 4
 	),
 	(
@@ -632,7 +632,7 @@ values
 		, 'tickets'
 		, 'ticket_no'
 		, 'ticket_no'
-		, 0
+		, 1
 		, 1
 	),
 	(
@@ -643,7 +643,7 @@ values
 		, 'tickets'
 		, 'book_ref'
 		, 'book_ref'
-		, 0
+		, 1
 		, 2
 	),
 	(
@@ -654,7 +654,7 @@ values
 		, 'tickets'
 		, 'passenger_id'
 		, 'passenger_id'
-		, 0
+		, 1
 		, 3
 	),
 	(
@@ -665,7 +665,7 @@ values
 		, 'tickets'
 		, 'passenger_name'
 		, 'passenger_name'
-		, 0
+		, 1
 		, 4
 	),
 	(
@@ -676,7 +676,7 @@ values
 		, 'tickets'
 		, 'contact_data'
 		, 'contact_data'
-		, 0
+		, 1
 		, 5
 	)
 ;
